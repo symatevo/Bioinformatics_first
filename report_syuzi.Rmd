@@ -1,0 +1,423 @@
+---
+title: "LAB REPORT"
+subtitle: 'Comparison of transcriptomic and proteomic data using R'
+author: "Syuzanna Matevosyan"
+date: '2022-05-27'
+output:
+  html_document:
+    toc: yes
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+<style type="text/css">
+  body{
+  font-size: 13pt;
+}
+</style>
+
+
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+
+```
+
+
+
+## Introduction
+
+The analysis is based on transcriptomic and proteomic data from healthy (control) and dystrophin-deficient (DMD) cardiomyocytes human(samples are from 2 patients). Applying data analysis methods to the transcriptomic and proteomic data of the same sample has the goal to check if the results from proteomics are consistent with the data from transcriptomic analysis. Having a list of genes (witch foldchange (Fch) and adjusted p-values) from the transcriptomic part where we compare disease vs. controls and a list of proteins (also characterized by foldchange and p-values) from the proteomic part where the same comparison was done. For this goal, using R scripts, the following questions were considered.
+
+- how many records are common on both lists
+
+- how many of them are consistent (up-regulated gene = higher protein level; down-regulated gene = lower protein level)
+
+- how many of them are significant (adjusted p-value<0.05) botch on protein and gene/ only on protein or only on transcript level
+
+- what is the correlation of fold-changes (for consistent genes-protein) e.g., if gene Fch=2 is protein level also 2-times higher
+
+- what is the correlation for each gene between mRNA and protein levels across samples (i.e. spearman or pearson, get r^2 and pvalue, and see how is the distribution of correlations)
+
+
+\newpage
+
+## Procedure
+
+Following libraries were used during comparison.
+
+```{r}
+library("readxl")
+library("VennDiagram")
+library("dplyr")
+library("ggrepel")
+library("tidyverse")
+
+```
+Data loaded from the file "rna_seq_protein_data.xls" to a DataFrame objects referenced by df_proteomic and df_transcriptomic.
+```{r}
+df_proteomic = read_excel("rna_seq_protein_data.xls", sheet = 1)
+df_transcriptomic = read_excel("rna_seq_protein_data.xls", sheet = 2)
+```
+
+
+Looking up for the structure of our DataFrame to make sure the data have been loaded correctly.
+
+
+```{r}
+str(df_proteomic)
+str(df_transcriptomic)
+```
+```{r}
+
+```
+
+
+Data was cleaned. We are interested in columns that contain Gene names, Fold changes and p-values
+
+```{r}
+df_proteomic = df_proteomic[c(3, 7, 6)]
+```
+```{r}
+df_transcriptomic = df_transcriptomic[c(1, 3, 6)]
+str(df_proteomic)
+str(df_transcriptomic)
+
+```
+
+DataFrame was filtered from <NA> values to retain only rows for which foldchane and pvalue are specified.
+
+```{r}
+df_proteomic <-df_proteomic[!is.na(df_proteomic$`log2(fold_change)`),]
+df_proteomic <- df_proteomic[!is.na(df_proteomic$`P-value`),]
+
+df_transcriptomic <- df_transcriptomic[!is.na(df_transcriptomic$log2FoldChange),]
+df_transcriptomic <- df_transcriptomic[!is.na(df_transcriptomic$padj),]
+str(df_proteomic)
+str(df_transcriptomic)
+
+```
+
+Some gene_names were duplicated. DataFrames was filtered further to retain only one best (of lowest P-value) match for each gene. It made by sorting DataFrames by values of the column P-value, and then by removing duplicates (which by default leaves the first row).
+
+```{r}
+df_proteomic <- df_proteomic[order(df_proteomic$`P-value`),]
+df_proteomic <- df_proteomic[!duplicated(df_proteomic$Gene_names),]
+
+df_transcriptomic <- df_transcriptomic[order(df_transcriptomic$padj),]
+df_transcriptomic <- df_transcriptomic[!duplicated(df_transcriptomic$GeneID),]
+```
+
+Looking to data again
+```{r}
+str(df_proteomic)
+str(df_transcriptomic)
+```
+
+The list of Gene names from protein analysis compared with a list of geneID from the transcriptomic analysis for identification common genes.
+
+```{r}
+common_genes <- intersect(df_proteomic$Gene_names, df_transcriptomic$GeneID)
+```
+
+For visualization "VennDiagramm" library were used
+
+```{r}
+v <- venn.diagram(list(`genes\nproteomic`=df_proteomic$Gene_names,
+                       `genes\ntranscriptomic`=df_transcriptomic$GeneID),
+                  col = "black",
+                  fill = c("darkorange1", "orchid3"),
+                  alpha = c(0.6, 0.6), 
+                  cat.cex = 1, 
+                  cat.fontface = "bold", 
+                  cat.dist = c(0.06, 0.04),
+                  cex = c(1.5, 2, 1.5),
+                  margin = 0.05,
+                  filename=NULL)
+
+
+v[[5]]$label <- "12245\n(75%)"
+v[[6]]$label <- "\n194\n(1%)"
+v[[8]]$label <- "3856\n(24%)"
+
+grid.newpage()
+grid.draw(v)
+```
+
+3856 records are common from proteomic and transcriptomic data. Common records are in object referenced by common_genes
+
+```{r}
+str(common_genes)
+```
+
+For further analysis data was filtered to remain only data belonging to common records.
+
+
+```{r}
+df_proteomic <- df_proteomic %>% filter(Gene_names %in% common_genes)
+```
+
+
+```{r}
+df_transcriptomic <- df_transcriptomic %>% filter(GeneID %in% common_genes)
+```
+
+New dataframe was created collecting all common records. Before that, rows of df_proteomic and df_transcriptomic reordered by using common_genes order.
+```{r}
+df_proteomic <- df_proteomic %>% arrange(factor(Gene_names, levels = common_genes))
+df_transcriptomic <- df_transcriptomic %>% arrange(factor(GeneID, levels = common_genes))
+```
+
+
+```{r}
+proteomic_pvalue <- df_proteomic$`P-value`
+transcriptomic_pvalue <- df_transcriptomic$padj
+proteomic_foldchange <- df_proteomic$`log2(fold_change)`
+transcriptomic_foldchange <- df_transcriptomic$log2FoldChange
+
+df_common <- data.frame(common_genes, proteomic_pvalue, transcriptomic_pvalue, proteomic_foldchange, transcriptomic_foldchange)
+```
+
+New data_frame is 
+```{r}
+head(df_common)
+```
+
+Using fold_change values, data was seperated into 3 groups.
+1: (High regulated genes) Fold change is positive number in both transcriptomic and proteomic data.
+2: (Low regulated genes) Fold change is negative number in both transcriptomic and proteomic data
+3: (Different regulation) Fold change is positive in one data and negative in another.
+
+```{r}
+positive <- (df_common$proteomic_foldchange > 0 & df_common$transcriptomic_foldchange > 0)
+negative <- (df_common$proteomic_foldchange < 0 & df_common$transcriptomic_foldchange < 0)
+different <- ((df_common$proteomic_foldchange < 0 & df_common$transcriptomic_foldchange > 0) | (df_common$proteomic_foldchange > 0 & df_common$transcriptomic_foldchange < 0))
+```
+
+3th group seperetaed into 2 subgroups
+3.1: Negative fold change in proteomic and Positive fold change in transcriptomic
+3.2: Positive fold change in proteomic and Negative fold change in transcriptomic 
+
+```{r}
+negative_proteomic_positive_transcriptomic <- (df_common$proteomic_foldchange < 0 & df_common$transcriptomic_foldchange > 0)
+positive_proteomic_negative_transcriptomic <- (df_common$proteomic_foldchange > 0 & df_common$transcriptomic_foldchange < 0)
+```
+
+Record numbers of each group was stored on variables.
+```{r}
+nump = length(which(positive == TRUE))
+numn = length(which(negative == TRUE))
+numd = length(which(different == TRUE))
+numnppt = length(which(negative_proteomic_positive_transcriptomic == TRUE))
+numppnt = length(which(positive_proteomic_negative_transcriptomic == TRUE))
+```
+
+
+
+Status column added to the df_common, which represents the regulation of genes. 
+```{r}
+
+df_common <- df_common  %>%
+  mutate(Status = case_when(
+    (positive == TRUE) ~ nump,
+    (negative == TRUE) ~ numn,
+    (different == TRUE) ~ numd
+  ))
+
+df_common <- df_common  %>%
+  mutate(Status1 = case_when(
+    (negative_proteomic_positive_transcriptomic == TRUE) ~ numnppt,
+    (positive_proteomic_negative_transcriptomic == TRUE) ~ numppnt,
+    (different == FALSE) ~ nump+numn
+  ))
+
+
+head(df_common)
+```
+
+Data was ploted using ggplot function. For axis Fold change used from transcriptomic and proteomic. 
+
+```{r}
+p <- ggplot(df_common, aes(x = proteomic_foldchange, y = transcriptomic_foldchange)) + geom_point(aes(color = 
+as.factor(Status), shape = as.factor(Status1)))
+p <- p + labs(color = "3 groups", shape = "From 1853 different", title = "Fold change comparison")
+p <- p + guides(color = guide_legend(order = 1), shape = guide_legend(order = 2))
+cols = c("847" = "red", "1156" = "blue", "1853" = "darkgreen")
+p <- p + scale_color_manual(values = cols,  labels = c("847 positive", "1156 negative", "1853 different"))
+p <- p + scale_shape_manual(values=c(3, 2, 16), labels = c("663 negative transcriptomic positve proteomic", "1190 positive transcriptomic negative proteomic", ""))
+p
+```
+
+
+Result of 3 groups.
+1: 847 (High regulated genes) Fold change is positive number in both transcriptomic and proteomic data 
+2: 1156 (Low regulated genes) Fold change is negative number in both transcriptomic and proteomic data
+3: 1853 (Different regulation) Fold change is positive in one data and negative in another.
+
+3.1: 1190 genes have negative fold change in proteomic and Positive fold change in transcriptomic
+3.2: 663 genes have positive fold change in proteomic and Negative fold change in transcriptomic 
+
+
+For further steps data sepereated into 3 groups based on p-value.
+1: (Significant genes) p-value is smaller than 0.05 in both transcriptomic and proteomic data
+2: (Non sginificant genes) p-value is higher than 0.05 in both transcriptomic and proteomic data
+3: (Different) p-value is smaller than 0.05 in one data and higher in another
+
+```{r}
+
+sign <- (df_common$proteomic_pvalue < 0.05 & df_common$transcriptomic_pvalue < 0.05)
+notsign <- (df_common$proteomic_pvalue > 0.05 & df_common$transcriptomic_pvalue > 0.05)
+differents <- ((df_common$proteomic_pvalue < 0.05 & df_common$transcriptomic_pvalue > 0.05) | (df_common$proteomic_pvalue > 0.05 & df_common$transcriptomic_pvalue < 0.05))
+```
+
+Number of each group was calculated
+```{r}
+nums = length(which(sign == TRUE))
+numns = length(which(notsign == TRUE))
+numds = length(which(differents == TRUE))
+```
+
+Status2 column added to the df_common, which represents the significant of genes.
+```{r}
+df_common <- df_common %>%
+  mutate(Status2 = case_when(
+    (sign == TRUE) ~ nums,
+    (notsign == TRUE) ~ numns,
+    (differents == TRUE) ~ numds
+  ))
+
+```
+Visualization
+
+```{r}
+p <- ggplot(df_common, aes(x = proteomic_foldchange, y = transcriptomic_foldchange)) + geom_point(aes(color = 
+as.factor(Status2)))
+p <- p + scale_color_manual(values = c("red", "grey"),  labels = c("69 different significant", "3787 non significant"))
+p <- p + labs(color = "2 groups", title = "Significant genes")
+p
+```
+Result of 3 groups.
+1: 0 (Significant genes) p-value is smaller than 0.05 in both transcriptomic and proteomic data
+2: 3787 (Non significant genes) p-value is higher than 0.05 in both transcriptomic and proteomic data
+3: 69 (Different) p-value is smaller than 0.05 in one data and higher in another
+
+
+Data was filtered and only genes that have the same regulation and are significant in one data are left.
+```{r}
+df_common_fch_sign <- df_common %>% filter(different == FALSE & differents == TRUE)
+```
+Data was devided into 2 groups
+3.1: p-value is smaller than 0.05 in proteomic data
+3.2: p-value is smaller than 0.05 in transcriptomic data
+```{r}
+sign_onlyprot <- df_common_fch_sign$proteomic_pvalue < 0.05
+sign_onlytrans <- df_common_fch_sign$transcriptomic_pvalue < 0.05
+```
+
+Number of each group was calculated
+```{r}
+numsop <- length(which(sign_onlyprot == TRUE))
+numsot <- length(which(sign_onlytrans == TRUE))
+```
+
+
+```{r}
+df_common_fch_sign <- df_common_fch_sign %>%
+  mutate(Status4 = case_when(
+    (sign_onlyprot == TRUE) ~ numsop,
+    (sign_onlytrans == TRUE) ~ numsot
+  ))
+
+positive <- (df_common_fch_sign$proteomic_foldchange > 0 & df_common_fch_sign$transcriptomic_foldchange > 0)
+negative <- (df_common_fch_sign$proteomic_foldchange < 0 & df_common_fch_sign$transcriptomic_foldchange < 0)
+nump = length(which(positive == TRUE))
+numn = length(which(negative == TRUE))
+df_common_fch_sign <- df_common_fch_sign  %>%
+  mutate(Status5 = case_when(
+    (positive == TRUE) ~ nump,
+    (negative == TRUE) ~ numn
+  ))
+```
+
+```{r}
+p <- ggplot(df_common_fch_sign, aes(x = proteomic_foldchange, y = transcriptomic_foldchange)) + geom_point(aes(color = 
+as.factor(Status5), shape = as.factor(Status4))) + geom_text(size = 2, hjust = 0, nudge_y = 0.05, aes(label = common_genes))
+p <- p + labs(color = "fold change", shape = "significant")
+p <- p + scale_color_manual(values = c("blue", "red"), labels = c("21 same high regulation", "23 same low regulation"))
+p <- p + scale_shape_manual(values = c(17, 15), labels = c("1 signficiant only on transcriptomic", "43 significant only on proteomic"))
+p
+```
+
+\newpage
+
+## Result
+
+To see the correlation for each gene between mRNA and protein levels across samples, r^2 and pvalue counted.
+```{r}
+mod1 = lm(transcriptomic_foldchange~proteomic_foldchange, data = df_common_fch_sign)
+modsum = summary(mod1)
+
+r2 = modsum$adj.r.squared
+r2
+my.p = modsum$coefficients[2,4]
+my.p
+
+```
+
+Visualization of the distribution of correlations
+
+```{r}
+p <- ggplot(df_common_fch_sign, aes(x = proteomic_foldchange, y = transcriptomic_foldchange)) + geom_point(aes(color = 
+as.factor(Status5), shape = as.factor(Status4))) + geom_text(size = 2, hjust = 0, nudge_y = 0.05, aes(label = common_genes))
+p <- p + labs(color = "fold change", shape = "significant")
+p <- p + scale_color_manual(values = c("blue", "red"), labels = c("21 same high regulation", "23 same low regulation"))
+p <- p + scale_shape_manual(values = c(17, 15), labels = c("1 signficiant only on transcriptomic", "43 significant only on proteomic"))
+p <- p + stat_smooth(method = "lm", col = "yellow")
+p <- p + annotate(geom= "text", x = -3.8, y= 1, label = "r^2 = 0.1163056", color = "red")
+p <- p + annotate(geom = "text", x= -3.8, y = 0.8, label = "p = 0.01344885", color = "red")
+p
+```
+
+If we remove DMD from data, and make corralation again we will have the following results.
+```{r}
+df_common_fch_sign <- df_common_fch_sign[-1,]
+```
+Make visualization
+```{r}
+mod1 = lm(transcriptomic_foldchange~proteomic_foldchange, data = df_common_fch_sign)
+modsum = summary(mod1)
+
+r2 = modsum$adj.r.squared
+r2
+my.p = modsum$coefficients[2,4]
+my.p
+```
+
+
+```{r}
+p <- ggplot(df_common_fch_sign, aes(x = proteomic_foldchange, y = transcriptomic_foldchange)) + geom_point(aes(color = 
+as.factor(Status5), shape = as.factor(Status4))) + geom_text(size = 2, hjust = 0, nudge_y = 0.05, aes(label = common_genes))
+p <- p + labs(color = "fold change", shape = "significant")
+p <- p + scale_color_manual(values = c("blue", "red"), labels = c("21 same high regulation", "22 same low regulation"))
+p <- p + scale_shape_manual(values = c(17, 15), labels = c("1 signficiant only on transcriptomic", "42 significant only on proteomic"))
+p <- p + stat_smooth(method = "lm", col = "yellow")
+p <- p + annotate(geom= "text", x = -0.7, y= 1, label = "r^2 = 0.2271955", color = "red")
+p <- p + annotate(geom = "text", x= -0.7, y = 0.8, label = "p = 0.0008908319", color = "red")
+p
+```
+
+## Conclusion
+
+Analysis has shown that there exists a poor correlation for each gene between mRNA and protein levels across samples. Results showed low R-square and low p-value (p-value <= 0.05), which means that this model doesn't explain much of the variation of the data but is significant. 
+
+
+
+
+
