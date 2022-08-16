@@ -1,6 +1,6 @@
 # Bioinformatics_report
 
-This Bioinformatics report was done in Laboratory of Bioinformatics and Genome Biology. Aim is comparison of proteomic and transcriptomic data of same sample, and checking how consistent they are.
+This Bioinformatics report was done in Laboratory of Bioinformatics and Genome Biology.
 
 
 
