@@ -4,7 +4,7 @@ This Bioinformatics report was done in Laboratory of Bioinformatics and Genome B
 
 
 
-Analysis done on transcriptomic and proteomic data from healthy (control) and dystrophin-deficient (DMD) cardiomyocytes human(samples are from 2 patients). Applying data analysis methods to the transcriptomic and proteomic data of the same sample has the goal to check if the results from proteomics are consistent with the data from transcriptomic analysis. Having a list of genes (witch foldchange (Fch) and adjusted p-values) from the transcriptomic part where we compare disease vs. controls and a list of proteins (also characterized by foldchange and p-values) from the proteomic part where the same comparison was done. For this goal, using R scripts, the following questions were considered.
+Analysis were done on transcriptomic and proteomic data from healthy (control) and dystrophin-deficient (DMD) cardiomyocytes human(samples are from 2 patients). Applying data analysis methods to the transcriptomic and proteomic data of the same sample has the goal to check if the results from proteomics are consistent with the data from transcriptomic analysis. Having a list of genes (witch foldchange (Fch) and adjusted p-values) from the transcriptomic part where we compare disease vs. controls and a list of proteins (also characterized by foldchange and p-values) from the proteomic part where the same comparison was done. For this goal, using R scripts, the following questions were considered.
 
 - how many records are common on both lists
 
