@@ -1,6 +1,6 @@
 # Lab Report: Comparison of Transcriptomic and Proteomic Data using R
 
-**Author:** Syuzanna Matevosyan
+**Author:** Syuzanna Matevosyan \
 **Date:** May 27, 2022
 
 ## Introduction
