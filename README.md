@@ -1,4 +1,4 @@
-** Comparative Analysis of Proteomic and Transcriptomic Profiles in Dystrophin-Deficient Cardiomyocytes **
+### Comparative Analysis of Proteomic and Transcriptomic Profiles in Dystrophin-Deficient Cardiomyocytes
 
 **Author:** Syuzanna Matevosyan \
 **Date:** May 27, 2022
@@ -42,11 +42,6 @@ The following questions are addressed in this analysis using R scripts:
 - How many of these records are significant (adjusted p-value < 0.05) in both the protein and gene data, only in the protein data, or only in the transcript data?
 - What is the correlation of fold changes for consistent genes-proteins, i.e., if a gene's fold change is 2, is the protein level also 2 times higher?
 - What is the correlation for each gene between mRNA and protein levels across samples (using Spearman or Pearson correlation)? The analysis also includes obtaining R-squared values and p-values, as well as visualizing the distribution of correlations.
-
-### Preprocessing
-
-`df_proteomic` and `df_transcriptomic` DataFrames containes information about gene names, fold changes, and p-values.
-The data was cleaned by removing rows with missing fold change or p-value values to retain only the relevant data.
 
 ### Analysis
 
